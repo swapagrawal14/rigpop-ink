@@ -25,12 +25,12 @@ const ff = (...args) => {
 
 // the same three beats the render is built around: a cut, the busiest action, a held shot
 const SEGMENTS = [
-  [20.2, 1.4],
-  [26.1, 1.4],
-  [29.4, 1.4],
+  [26.2, 1.1],
+  [33.8, 1.1],
+  [38.4, 1.1],
 ];
 
-const TILE_H = 300;
+const TILE_H = 240;
 const tiles = [];
 SEGMENTS.forEach(([t, d], i) => {
   const out = path.join(docs, `.seg${i}.gif`);
@@ -38,10 +38,10 @@ SEGMENTS.forEach(([t, d], i) => {
     '-ss', String(t), '-t', String(d), '-i', source,
     '-ss', String(t), '-t', String(d), '-i', inked,
     '-filter_complex',
-    `[0:v]crop=iw:ih*0.78:0:ih*0.11,scale=-2:${TILE_H},setsar=1[a];` +
-    `[1:v]crop=iw:ih*0.78:0:ih*0.11,scale=-2:${TILE_H},setsar=1[b];` +
-    '[a][b]hstack=inputs=2,split[s0][s1];[s0]palettegen=max_colors=96:stats_mode=diff[p];' +
-    '[s1][p]paletteuse=dither=bayer:bayer_scale=3',
+    `[0:v]fps=12,crop=iw:ih*0.78:0:ih*0.11,scale=-2:${TILE_H},setsar=1[a];` +
+    `[1:v]fps=12,crop=iw:ih*0.78:0:ih*0.11,scale=-2:${TILE_H},setsar=1[b];` +
+    '[a][b]hstack=inputs=2,split[s0][s1];[s0]palettegen=max_colors=64:stats_mode=diff[p];' +
+    '[s1][p]paletteuse=dither=none',
     out,
   );
   tiles.push(out);

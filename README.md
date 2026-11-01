@@ -1,5 +1,9 @@
 # rigpop-ink
 
+![source on the left, the same clip inked on the right](docs/demo.gif)
+
+<sub>The demo clip is rendered with `--preset manga-noir --seed 7`. Left: the original plate. Right: what rigpop-ink returns, with the source's audio intact.</sub>
+
 **Footage that redraws itself.** Point it at a clip and every frame is re-painted as
 ink-on-paper — flat paint bands, contour lines that *tremble*, a print-shop dot screen —
 except the parts that usually make a video filter feel dead are directed by the film
@@ -140,6 +144,17 @@ Not a style-transfer model, not temporally consistent in the ML sense — it's a
 It has no idea a person is a person; it flattens what it is given. Busy, low-contrast
 footage (shaky handheld in a dark interior) inks muddier than clean, high-contrast,
 strongly-blocked footage. That is what `probe` is for.
+
+## Making the demo yourself
+
+```bash
+npm run fetch:demo                                   # 4 MB, CC-BY trailer
+node bin/rigpop-ink.js restyle demo/source-sintel.mp4 -o out/ink-sintel.mp4 --preset manga-noir --seed 7
+node scripts/make-demo.mjs out/ink-sintel.mp4        # rebuilds docs/demo.gif + docs/poster.jpg
+```
+
+The rendered mp4 is not committed (25 MB, and it is one command away). The GIF and the
+poster are, because a look-dev repo should show the look on the front page.
 
 ## Credits
 
