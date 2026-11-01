@@ -93,6 +93,7 @@ into x264 with the source's own audio muxed back in.
 | `ghazal` | warm sepia wash, hairline contour, soft grain — slow songs |
 | `pulp-horror` | acid spot inks, crushed contrast, screen-print dots |
 | `riso` | four plates apart, two-spot risograph |
+| `night` | dark interiors: shadow lift, four big flat shapes, faint screentone |
 | `blueprint` | ink lines only, no fill, no dots — blocking shots |
 
 Each preset carries a **key family**: two to four (ink, paper) pairs. A cut advances the
@@ -119,12 +120,17 @@ GET  /api/out/:id            finished mp4 (range-capable)
 
 ```
 restyle  <in> -o <out.mp4>   --preset --start --dur --scale --seed --crf --fps
+                             --compare  (source | ink side by side, one file)
                              --no-beat --no-cuts --no-drama --no-shake
 still    <in> -o <out.png>   --at <s>  (same flags)
 probe    <in>                the director's read on a clip
 presets
 serve                        --port 8137 --file a.mp4,b.mp4
 ```
+
+`--compare` writes the side-by-side in one command — the view that actually tells you whether
+a look works, since a single stylised frame says very little. The ink-only file is kept next
+to it as `<out>.ink.mp4`.
 
 `--no-beat`, `--no-cuts`, `--no-drama`, `--no-shake` switch each directing rule off, which
 is also the fastest way to see what the rules are actually doing: render the same window
@@ -135,6 +141,16 @@ twice, once with `--no-cuts` and once without, and flip between them.
 Same file + same preset + same seed + same flags = byte-identical output. Every random
 thing (paper grain, boil offsets, key rotation) is seeded from `(seed, shot, onset count)`,
 never from time. That means a render can be diffed, cached and re-made.
+
+## Tests
+
+```bash
+npm test
+```
+
+Five checks, no framework: `probe` reads a clip, a still renders and is not blank, the same
+seed produces the same bytes, a different seed produces different bytes, and every preset
+renders. The determinism ones are the point — they are the contract in SPEC §6.
 
 ## Speed
 

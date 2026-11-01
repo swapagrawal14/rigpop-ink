@@ -13,7 +13,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyseSource, stillFrame, restyle, cropFromBars } from '../src/restyle.mjs';
+import { analyseSource, stillFrame, restyle, cropFromBars, makeCompare } from '../src/restyle.mjs';
 import { PRESETS } from '../src/presets.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -96,7 +96,8 @@ export async function startServer({ port = 8137, host = '0.0.0.0', files = [] } 
         const a = await analyse(file);
         const crop = q.get('crop') === '0' ? null : cropFromBars(a.bars, a.info.width, a.info.height);
         const overrides = {};
-        for (const k of ['thick', 'half', 'paperAmt', 'levels', 'lineGain', 'tintAmt', 'sat', 'edgeHi', 'radius']) {
+        for (const k of ['thick', 'half', 'paperAmt', 'levels', 'lineGain', 'tintAmt',
+          'sat', 'edgeHi', 'radius', 'minRegion', 'chromaCarry', 'hold', 'lift']) {
           if (q.get(k) !== null) overrides[k] = Number(q.get(k));
         }
         const r = await stillFrame({
@@ -139,7 +140,18 @@ export async function startServer({ port = 8137, host = '0.0.0.0', files = [] } 
             job.fps = p.fps;
             job.eta = p.eta;
           },
-        }).then((r) => Object.assign(job, { state: 'done', result: r, progress: 1 }))
+        }).then(async (r) => {
+          if (body.compare) {
+            const side = out.replace(/\.mp4$/i, '') + '.side.mp4';
+            makeCompare({
+              source: file, inked: out, output: side, start: Number(body.start || 0),
+              dur: Number(body.dur || 0), crop: r.crop && r.crop.w < 1e9 ? r.crop : null, fps: r.fps,
+            });
+            job.out = side;
+            r.compare = true;
+          }
+          Object.assign(job, { state: 'done', result: r, progress: 1 });
+        })
           .catch((e) => Object.assign(job, { state: 'error', error: e.message }));
         return json(res, 200, { id });
       }

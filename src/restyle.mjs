@@ -3,8 +3,11 @@
  * Only src/restyle.mjs and the web server call this; everything below it is pure.
  */
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 import { InkShader } from './ink.mjs';
-import { probe, RawReader, RawWriter } from './ffmpeg.mjs';
+import { probe, RawReader, RawWriter, ffmpegPath as ffmpegBin } from './ffmpeg.mjs';
 import { audioOnsets, motionMap } from './analyze.mjs';
 import { makeDirector } from './director.mjs';
 import { getPreset } from './presets.mjs';
@@ -113,6 +116,30 @@ export async function restyle({
       : 0,
     elapsed: (Date.now() - t0) / 1000,
   };
+}
+
+/**
+ * side-by-side: source on the left, ink on the right, one file. This is the view
+ * that makes a look legible — a single stylised frame tells you very little.
+ */
+export function makeCompare({ source, inked, output, start = 0, dur = 0, height = 480, crf = 20, crop = null, fps = 24 }) {
+  const { spawnSync } = require('node:child_process');
+  const ff = ffmpegBin();
+  const args = ['-hide_banner', '-loglevel', 'error', '-y'];
+  if (start > 0) args.push('-ss', String(start));
+  args.push('-i', source);
+  args.push('-i', inked);
+  const trim = dur > 0 ? `,trim=duration=${dur},setpts=PTS-STARTPTS` : '';
+  const srcCrop = crop ? `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y},` : '';
+  args.push('-filter_complex',
+    `[0:v]${srcCrop}scale=-2:${height},setsar=1,fps=${fps}[a];` +
+    `[1:v]scale=-2:${height},setsar=1,fps=${fps}[b];` +
+    `[a][b]hstack=inputs=2${trim}[v]`,
+    '-map', '[v]', '-map', '1:a?', '-c:v', 'libx264', '-crf', String(crf), '-r', String(fps),
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-shortest', output);
+  const r = spawnSync(ff, args, { stdio: ['ignore', 'inherit', 'inherit'] });
+  if (r.status !== 0) throw new Error('compare: ffmpeg failed');
+  return output;
 }
 
 /** sub-pixel-ish frame shift with clamped edges (the "paper moves" feel) */

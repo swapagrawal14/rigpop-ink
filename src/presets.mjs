@@ -77,6 +77,25 @@ export const PRESETS = {
     ],
   },
 
+  night: {
+    label: 'Night',
+    blurb: 'For dark interiors: shadows opened, big flat shapes, faint screentone.',
+    style: {
+      radius: 10, levels: 4, sat: 0.9, black: 6, white: 238,
+      edgeLo: 1.1, edgeHi: 18, darkGate: 22, thick: 1.15, boil: 0.5, jitter: 0.25,
+      ink: [16, 14, 26], tint: [240, 234, 220], tintAmt: 0.18,
+      half: 0.08, halfDark: 110, paperAmt: 0.06,
+      lift: 0.88, auto: 1,
+      minLine: 60, hold: 0.65, lineGain: 1.35, chromaCarry: 0.45, minRegion: 320,
+      hatch: { pitch: 6, angle: 45, from: 1, to: 1, mix: 0.45, cross: false },
+    },
+    keys: [
+      { ink: hex('#100a06'), tint: hex('#f6e9cc'), ramp: ramp('#100a06', '#2a1a10', '#5c3a20', '#c08a4a', '#f6e9cc') },
+      { ink: hex('#0a0a16'), tint: hex('#e8e4f2'), ramp: ramp('#0a0a16', '#1b1b33', '#3d3a5c', '#8a86a8', '#e8e4f2') },
+      { ink: hex('#08120f'), tint: hex('#e2f0e6'), ramp: ramp('#08120f', '#123027', '#2c5f4c', '#7fa892', '#e2f0e6') },
+    ],
+  },
+
   blueprint: {
     label: 'Blueprint',
     blurb: 'Ink lines only — no fill, no dots. For blocking shots.',

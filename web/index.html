@@ -160,10 +160,12 @@
         <input type="range" id="s-paper" min="0" max="0.22" step="0.005" /></div>
       <div class="slider"><label for="s-levels">Paint bands</label><output id="o-levels"></output>
         <input type="range" id="s-levels" min="3" max="14" step="1" /></div>
-      <div class="slider"><label for="s-sat">Pigment</label><output id="o-sat"></output>
-        <input type="range" id="s-sat" min="0" max="2" step="0.02" /></div>
-      <div class="slider"><label for="s-edge">Contour detail</label><output id="o-edge"></output>
-        <input type="range" id="s-edge" min="6" max="30" step="0.5" /></div>
+      <div class="slider"><label for="s-chroma">Pigment carry</label><output id="o-chroma"></output>
+        <input type="range" id="s-chroma" min="0" max="1" step="0.02" /></div>
+      <div class="slider"><label for="s-region">Shape size</label><output id="o-region"></output>
+        <input type="range" id="s-region" min="20" max="500" step="10" /></div>
+      <div class="slider"><label for="s-hold">Line hold</label><output id="o-hold"></output>
+        <input type="range" id="s-hold" min="0" max="0.85" step="0.05" /></div>
       <div class="slider"><label for="s-tint">Paper tint</label><output id="o-tint"></output>
         <input type="range" id="s-tint" min="0" max="0.8" step="0.01" /></div>
     </div>
@@ -176,6 +178,9 @@
       <select id="clip"></select></div>
   </div>
 
+  <label class="note" style="display:flex; gap:8px; align-items:center">
+    <input type="checkbox" id="sbs" /> side-by-side with the source
+  </label>
   <button class="btn" id="go">Ink the whole clip</button>
   <div class="grp">
     <div class="slider" style="grid-template-columns:1fr"><label for="from">From (s)</label>
@@ -201,8 +206,11 @@ const state = {
   styles: {}, t: 0, jobId: null,
 };
 
-const SLIDERS = ['thick', 'half', 'paper', 'levels', 'sat', 'edge', 'tint'];
-const QKEY = { thick: 'thick', half: 'half', paper: 'paperAmt', levels: 'levels', sat: 'sat', edge: 'edgeHi', tint: 'tintAmt' };
+const SLIDERS = ['thick', 'half', 'paper', 'levels', 'chroma', 'region', 'hold', 'tint'];
+const QKEY = {
+  thick: 'thick', half: 'half', paper: 'paperAmt', levels: 'levels',
+  chroma: 'chromaCarry', region: 'minRegion', hold: 'hold', tint: 'tintAmt',
+};
 
 async function boot() {
   const [lib, presets] = await Promise.all([
@@ -255,14 +263,18 @@ function syncSliders() {
   $('s-half').value = st.half ?? 0.2;
   $('s-paper').value = st.paperAmt ?? 0.1;
   $('s-levels').value = st.levels ?? 8;
-  $('s-sat').value = st.sat ?? 1;
-  $('s-edge').value = st.edgeHi ?? 14;
+  $('s-chroma').value = st.chromaCarry ?? 0.45;
+  $('s-region').value = st.minRegion ?? 90;
+  $('s-hold').value = st.hold ?? 0.5;
   $('s-tint').value = st.tintAmt ?? 0.2;
   syncOutputs();
 }
 
 function syncOutputs() {
-  for (const s of SLIDERS) $('o-' + s).textContent = Number($('s-' + s).value).toFixed(s === 'levels' ? 0 : 2);
+  for (const s of SLIDERS) {
+    const v = Number($('s-' + s).value);
+    $('o-' + s).textContent = s === 'levels' || s === 'region' ? String(Math.round(v)) : v.toFixed(2);
+  }
 }
 
 async function loadClip() {
@@ -282,6 +294,8 @@ async function loadClip() {
   drawMarks();
   drawDrama();
   syncSliders();
+  // first frame of most clips is black leader — park the playhead where there is picture
+  state.t = Math.min(a.duration - 1 / a.fps, a.duration * 0.35);
   refresh();
 }
 
@@ -385,6 +399,7 @@ async function startRender() {
     start: Number($('from').value),
     dur: Number($('len').value),
     scale: 1,
+    compare: $('sbs').checked,
   };
   $('go').disabled = true;
   const { id } = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());

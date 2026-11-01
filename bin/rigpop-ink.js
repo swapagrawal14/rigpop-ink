@@ -10,7 +10,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { restyle, stillFrame, analyseSource } from '../src/restyle.mjs';
+import { restyle, stillFrame, analyseSource, makeCompare } from '../src/restyle.mjs';
 import { PRESETS } from '../src/presets.mjs';
 
 const argv = process.argv.slice(2);
@@ -101,9 +101,11 @@ async function main() {
     const file = positional[0];
     const out = flags.o || flags.out;
     if (!file || !out) throw new Error('usage: rigpop-ink restyle <file> -o out.mp4');
+    const compare = flags.compare === true || flags.compare === '1';
+    const inkedPath = compare ? out.replace(/\.mp4$/i, '') + '.ink.mp4' : out;
     const r = await restyle({
       input: file,
-      output: out,
+      output: inkedPath,
       preset: flags.preset || 'manga-noir',
       start: num(flags.start, 0),
       dur: num(flags.dur, 0),
@@ -114,8 +116,12 @@ async function main() {
       features: featuresFrom(flags),
       onProgress: (p) => { if (!flags.quiet) process.stdout.write(`\r${bar(p)}`); },
     });
+    if (compare) {
+      makeCompare({ source: file, inked: inkedPath, output: out, start: num(flags.start, 0), dur: num(flags.dur, 0), crop: r.crop && r.crop.w < 1e9 ? r.crop : null, fps: r.fps });
+      console.log(`\n${out}  (source | ink — ink-only copy at ${inkedPath})`);
+    }
     if (!flags.quiet) process.stdout.write('\r');
-    console.log(`\n${r.output}`);
+    if (!compare) console.log(`\n${r.output}`);
     console.log(`  ${r.width}x${r.height} @ ${r.fps} fps  ${r.seconds.toFixed(2)}s  ${r.frames} frames`);
     console.log(`  ${r.shots} shots · ${r.onsets} onsets · drama ${r.meanDrama.toFixed(2)} · preset ${r.preset} · seed ${r.seed}`);
     console.log(`  rendered in ${r.elapsed.toFixed(1)}s (${(r.frames / r.elapsed).toFixed(1)} f/s)`);

@@ -1,11 +1,15 @@
 {
   "name": "rigpop-ink",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Footage that redraws itself — a hand-written ink/paint renderer whose line weight, ink colour and boil are directed by the clip's own cuts and beats.",
-  "bin": { "rigpop-ink": "./bin/rigpop-ink.js" },
-  "engines": { "node": ">=20" },
+  "description": "Footage that redraws itself \u2014 a hand-written ink/paint renderer whose line weight, ink colour and boil are directed by the clip's own cuts and beats.",
+  "bin": {
+    "rigpop-ink": "./bin/rigpop-ink.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "probe": "node bin/rigpop-ink.js probe",
     "still": "node bin/rigpop-ink.js still",
@@ -13,8 +17,18 @@
     "presets": "node bin/rigpop-ink.js presets",
     "serve": "node bin/rigpop-ink.js serve --port 8137",
     "fetch:demo": "node scripts/fetch-demo.mjs",
-    "demo": "node scripts/make-demo.mjs"
+    "demo": "node scripts/make-demo.mjs",
+    "test": "node test/smoke.mjs"
   },
-  "keywords": ["video", "renderer", "ink", "cel", "kuwahara", "halftone", "ffmpeg", "canvas"],
+  "keywords": [
+    "video",
+    "renderer",
+    "ink",
+    "cel",
+    "kuwahara",
+    "halftone",
+    "ffmpeg",
+    "canvas"
+  ],
   "license": "MIT"
 }

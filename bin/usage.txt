@@ -14,11 +14,13 @@ examples
   node bin/rigpop-ink.js serve --port 8137
 
 flags
-  --preset <name>    manga-noir (default) · ghazal · pulp-horror · riso · blueprint
+  --preset <name>    manga-noir (default) · ghazal · pulp-horror · riso · night · blueprint
   --start --dur <s>  render a window of the clip instead of all of it
   --scale <k>        output scale, 0.5 = half res (2× faster)
   --seed <n>         same seed + same file = byte-identical render
   --crf <n>          x264 quality (default 18, lower = better)
+  --compare          also write a side-by-side of source and ink (keeps the
+                     ink-only file next to it as <out>.ink.mp4)
   --no-beat          ignore audio onsets (no line punches, no boil on the hit)
   --no-cuts          one ink key for the whole clip
   --no-drama         fixed line weight
