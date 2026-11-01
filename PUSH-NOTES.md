@@ -3,7 +3,11 @@
 **Local repo:** `/home/user/rigpop-ink` · branch `main` · 2 commits
 **Remote (once it exists):** `git@github.com:swapagrawal14/rigpop-ink.git`
 
-## Why it is not pushed yet
+> **Pushed.** `main` @ `97b5110` → https://github.com/swapagrawal14/rigpop-ink
+> Deploy key used: `rigpop-ink-deploy` (`~/.ssh/id_ed25519_rigpop2`). Keep this file for the
+> recipe; the sections below are the history of how the remote got set up.
+
+## Why it was not pushed at first
 
 The existing key `~/.ssh/id_ed25519_rigpop` is a **deploy key scoped to `rigpop-motion`** —
 GitHub does not let one deploy key write to two repos, and the account has no other
