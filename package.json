@@ -1,6 +1,6 @@
 {
   "name": "rigpop-ink",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Footage that redraws itself \u2014 a hand-written ink/paint renderer whose line weight, ink colour and boil are directed by the clip's own cuts and beats.",
@@ -18,7 +18,8 @@
     "serve": "node bin/rigpop-ink.js serve --port 8137",
     "fetch:demo": "node scripts/fetch-demo.mjs",
     "demo": "node scripts/make-demo.mjs",
-    "test": "node test/smoke.mjs"
+    "test": "node test/smoke.mjs",
+    "site": "node scripts/make-site.mjs"
   },
   "keywords": [
     "video",

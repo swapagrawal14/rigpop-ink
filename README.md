@@ -142,6 +142,24 @@ Same file + same preset + same seed + same flags = byte-identical output. Every 
 thing (paper grain, boil offsets, key rotation) is seeded from `(seed, shot, onset count)`,
 never from time. That means a render can be diffed, cached and re-made.
 
+## Static showroom (what Vercel serves)
+
+The darkroom is a **local Node server** — it shells out to `ffmpeg`, uses native `canvas`, and
+a 20-second clip is a ~90-second CPU job. That does not fit in a serverless function, so the
+deployed site is a *static* showroom instead, built ahead of time:
+
+```bash
+node scripts/make-site.mjs 26      # one still per preset + source frame + loops → public/assets
+```
+
+`public/` is the static site (draggable before/after, preset gallery, side-by-side clip) and
+`vercel.json` points Vercel at it with no build step and no dependency install. Redo
+`make-site.mjs` whenever a preset changes and the deployed page follows.
+
+If a deployment 404s, it is almost always one of: no `public/` (this repo had none until
+v0.2.1), `outputDirectory` not set, or Vercel trying to `npm install` the native deps —
+`vercel.json` here pins all three.
+
 ## Tests
 
 ```bash

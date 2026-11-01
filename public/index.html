@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>rigpop-ink — footage that redraws itself</title>
+<meta name="description" content="A hand-written ink renderer whose line weight, ink colour and boil are directed by the clip's own cuts and beats." />
+<meta property="og:title" content="rigpop-ink — footage that redraws itself" />
+<meta property="og:description" content="Every frame re-painted as ink on paper: flat paint bands, contours that tremble, a print-shop dot screen — directed by the soundtrack and the edit." />
+<meta property="og:image" content="/assets/manga-noir.jpg" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f3ede1'/%3E%3Cpath d='M6 24c4-10 8-14 20-16' stroke='%2316131a' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='9' cy='26' r='2.5' fill='%23d4462f'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --paper: #f3ede1;
+    --paper-2: #e7dfcf;
+    --ink: #16131a;
+    --ink-soft: #524b58;
+    --accent: #d4462f;
+    --teal: #1f6f63;
+    --line: #16131a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background-image: radial-gradient(#0000000a 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 22px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  header { padding: 46px 0 22px; }
+  .kicker { font: 11px/1 ui-monospace, monospace; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-soft); }
+  h1 {
+    font-size: clamp(38px, 7vw, 76px); line-height: .95; margin: 12px 0 0;
+    letter-spacing: -.035em; font-weight: 800;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { font-size: clamp(16px, 2.1vw, 20px); max-width: 46ch; color: var(--ink-soft); margin: 16px 0 0; }
+  .lede b { color: var(--ink); }
+
+  /* ---- the draggable before/after ---- */
+  .stage { margin: 26px 0 10px; }
+  .compare {
+    position: relative; border: 3px solid var(--ink); border-radius: 12px;
+    overflow: hidden; background: var(--ink); touch-action: none; cursor: ew-resize;
+    box-shadow: 8px 8px 0 #00000016;
+  }
+  .compare img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+  .compare .after { position: absolute; inset: 0; clip-path: inset(0 0 0 50%); }
+  .compare .after img { position: absolute; inset: 0; height: 100%; object-fit: cover; }
+  .handle {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--paper);
+    box-shadow: 0 0 0 1.5px var(--ink);
+  }
+  .handle::after {
+    content: "⇄"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 34px; height: 34px; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink);
+    display: grid; place-items: center; font-size: 15px; color: var(--ink);
+  }
+  .tag { position: absolute; bottom: 10px; font: 10px/1 ui-monospace, monospace; letter-spacing: .16em;
+    text-transform: uppercase; padding: 6px 8px; border-radius: 4px; background: #16131ad9; color: var(--paper); }
+  .tag.l { left: 10px; } .tag.r { right: 10px; }
+  .caption { font: 12.5px/1.6 ui-monospace, monospace; color: var(--ink-soft); margin-top: 10px; }
+
+  /* ---- presets ---- */
+  section { padding: 44px 0; border-top: 2px solid var(--ink); }
+  h2 { font-size: 13px; letter-spacing: .2em; text-transform: uppercase; margin: 0 0 18px;
+       font-family: ui-monospace, monospace; color: var(--ink-soft); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .card {
+    text-align: left; padding: 0; background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 10px; overflow: hidden; cursor: pointer; color: inherit; font: inherit;
+    transition: transform .09s ease, box-shadow .09s ease;
+  }
+  .card:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #00000022; }
+  .card[aria-pressed="true"] { box-shadow: 5px 5px 0 var(--accent); border-color: var(--accent); }
+  .card img { display: block; width: 100%; height: auto; border-bottom: 2px solid var(--ink); }
+  .card .body { padding: 10px 12px 12px; }
+  .card b { font-size: 14.5px; letter-spacing: -.01em; }
+  .card span { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  .card code { font: 11px/1 ui-monospace, monospace; color: var(--accent); }
+
+  /* ---- stages ---- */
+  .stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; counter-reset: s; }
+  .stage-card { border: 2px solid var(--ink); border-radius: 10px; padding: 12px 14px 14px; background: #ffffff45; }
+  .stage-card::before { counter-increment: s; content: "0" counter(s); font: 11px/1 ui-monospace, monospace; color: var(--accent); }
+  .stage-card b { display: block; margin: 8px 0 4px; font-size: 14px; }
+  .stage-card span { font-size: 12.5px; color: var(--ink-soft); }
+
+  pre {
+    background: var(--ink); color: #f3ede1; padding: 16px 18px; border-radius: 10px;
+    overflow-x: auto; font: 13px/1.7 ui-monospace, monospace; margin: 0;
+  }
+  pre .c { color: #9a93a4; }
+  .two { display: grid; grid-template-columns: 1.1fr .9fr; gap: 22px; align-items: start; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  .note { font-size: 13.5px; color: var(--ink-soft); }
+  .note b { color: var(--ink); }
+  .pill { display: inline-block; font: 11px/1 ui-monospace, monospace; padding: 5px 8px; border: 2px solid var(--ink);
+    border-radius: 99px; margin: 0 6px 6px 0; }
+  video { width: 100%; height: auto; display: block; border: 3px solid var(--ink); border-radius: 12px; }
+  footer { padding: 30px 0 60px; border-top: 2px solid var(--ink); font-size: 13px; color: var(--ink-soft); }
+  footer a { color: var(--teal); }
+  a { color: var(--teal); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">rigpop · media pipeline</div>
+    <h1>Footage that<br />redraws <em>itself</em></h1>
+    <p class="lede">Every frame re-painted as ink on paper — flat paint bands, contours that tremble,
+      a print-shop dot screen. The part that isn't a filter: <b>the clip's own cuts and beats</b>
+      decide the ink colour, the line weight and when the drawing shakes.</p>
+  </header>
+
+  <div class="stage">
+    <div class="compare" id="compare">
+      <img src="assets/source.jpg" alt="source frame" id="before" />
+      <div class="after" id="afterWrap"><img src="assets/manga-noir.jpg" alt="inked frame" id="after" /></div>
+      <div class="handle" id="handle"></div>
+      <span class="tag l">source</span>
+      <span class="tag r" id="afterTag">manga-noir</span>
+    </div>
+    <div class="caption">drag the divider · click a preset below to change the right-hand side · same frame, same crop</div>
+  </div>
+
+  <section>
+    <h2>presets — one frame, six inks</h2>
+    <div class="grid" id="presets"></div>
+  </section>
+
+  <section>
+    <h2>six stages per frame · all hand-written</h2>
+    <div class="stages">
+      <div class="stage-card"><b>integrate</b><span>Five summed-area tables, so any window's mean and variance is four array reads.</span></div>
+      <div class="stage-card"><b>kuwahara</b><span>Four-quadrant selective flatten: the lowest-variance quadrant wins. Regions go flat, edges stay.</span></div>
+      <div class="stage-card"><b>lift + levels</b><span>Median sets a gamma, the 2nd/98.5th percentiles set black and white. One preset survives day and night.</span></div>
+      <div class="stage-card"><b>paint</b><span>Luminance → band indices → small regions merged away → five hand-picked ramp colours.</span></div>
+      <div class="stage-card"><b>contour</b><span>Lines are the band boundaries: jump ≥ 2 is a fat contour, 1 is a hairline. Short runs are pruned.</span></div>
+      <div class="stage-card"><b>ink boil</b><span>Coverage field sampled with a sub-pixel wobble, held across frames: a stroke, not a shimmer.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>source | ink, side by side</h2>
+    <video src="assets/compare.mp4" autoplay muted loop playsinline poster="assets/manga-noir.jpg"></video>
+    <div class="caption">18 s from the demo clip · original audio kept in the real render · <span class="mono">--compare</span></div>
+  </section>
+
+  <section>
+    <div class="two">
+      <div>
+        <h2>run it locally</h2>
+        <pre><span class="c"># the renderer is a node program, not a site</span>
+git clone git@github.com:swapagrawal14/rigpop-ink.git
+cd rigpop-ink
+npm run fetch:demo
+
+node bin/rigpop-ink.js probe   demo/source-sintel.mp4
+node bin/rigpop-ink.js restyle demo/source-sintel.mp4 \
+  -o out/ink.mp4 --preset night --seed 7 --compare
+
+npm run serve   <span class="c"># the darkroom: scrub, sliders, live preview</span></pre>
+        <p class="note" style="margin-top:14px">Same file + preset + seed = <b>byte-identical</b> output.
+          Every random thing is seeded from <span class="mono">(seed, shot, onset count)</span>, never from time.</p>
+      </div>
+      <div>
+        <h2>why this page is static</h2>
+        <p class="note">The darkroom is a local Node server: it shells out to <b>ffmpeg</b>, uses native
+          <b>canvas</b>, and a 20-second clip is a ~90-second CPU job. None of that fits in a serverless
+          function, so what you see here is rendered ahead of time by
+          <span class="mono">scripts/make-site.mjs</span> — one still per preset, the before/after loop and one
+          side-by-side clip. The live thing runs on your machine with <span class="mono">npm run serve</span>.</p>
+        <div style="margin-top:16px">
+          <span class="pill">5 presets + blueprint</span>
+          <span class="pill">letterbox autocrop</span>
+          <span class="pill">audio onsets → boil</span>
+          <span class="pill">cuts → ink key</span>
+          <span class="pill">deterministic</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div><b>rigpop-ink</b> · <a href="https://github.com/swapagrawal14/rigpop-ink">github.com/swapagrawal14/rigpop-ink</a> · MIT</div>
+    <div style="margin-top:6px">Demo clip: Sintel trailer — © Blender Foundation | durian.blender.org — CC-BY 3.0.
+      Not committed; <span class="mono">npm run fetch:demo</span> pulls it.</div>
+  </footer>
+</div>
+
+<script>
+const PRESETS = {
+  'manga-noir': 'Bilevel shadows, thick contour, hard dot screen.',
+  ghazal: 'Warm sepia wash, hairline contour, soft grain — slow songs.',
+  'pulp-horror': 'Acid spot inks, crushed contrast, screen-print dots.',
+  riso: 'Four plates apart, two-spot risograph.',
+  night: 'Dark interiors: shadow lift, four big flat shapes, faint screentone.',
+  blueprint: 'Ink lines only, no fill, no dots — blocking shots.',
+};
+
+const grid = document.getElementById('presets');
+const after = document.getElementById('after');
+const afterTag = document.getElementById('afterTag');
+let current = 'manga-noir';
+
+for (const [key, blurb] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.className = 'card';
+  b.setAttribute('aria-pressed', String(key === current));
+  b.innerHTML = `<img src="assets/${key}.jpg" alt="${key} preset" loading="lazy" />
+    <div class="body"><b>${key}</b><span>${blurb}</span><code>--preset ${key}</code></div>`;
+  b.onclick = () => {
+    current = key;
+    after.src = `assets/${key}.jpg`;
+    afterTag.textContent = key;
+    for (const c of grid.children) c.setAttribute('aria-pressed', String(c === b));
+  };
+  grid.appendChild(b);
+}
+
+// draggable divider
+const compare = document.getElementById('compare');
+const afterWrap = document.getElementById('afterWrap');
+const handle = document.getElementById('handle');
+function setSplit(pct) {
+  pct = Math.max(2, Math.min(98, pct));
+  afterWrap.style.clipPath = `inset(0 0 0 ${pct}%)`;
+  handle.style.left = `${pct}%`;
+}
+function fromEvent(e) {
+  const r = compare.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  setSplit((x / r.width) * 100);
+}
+let dragging = false;
+compare.addEventListener('pointerdown', (e) => { dragging = true; fromEvent(e); });
+window.addEventListener('pointermove', (e) => { if (dragging) fromEvent(e); });
+window.addEventListener('pointerup', () => { dragging = false; });
+setSplit(50);
+</script>
+</body>
+</html>
