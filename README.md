@@ -50,6 +50,10 @@ rigpop-ink probe demo/source-sintel.mp4
 Those four numbers are the entire directing brief. `probe` is what I use to decide
 whether a clip is going to ink well before spending render time on it.
 
+Four consecutive shots, `--preset riso`, one render — the ink key changes on every cut:
+
+![four shots, four ink keys](docs/director.png)
+
 ## The six stages, per frame
 
 ```
