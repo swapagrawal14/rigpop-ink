@@ -398,7 +398,9 @@ export class InkShader {
       }
     }
     if (desp) this.despeckle();
-    this.pruneLines(this.minLine || 1);
+    // scale the minimum stroke length with frame area, like region merging does,
+    // so a 4K render and a preview still kill the same *relative* scribble
+    this.pruneLines(Math.round((this.minLine || 1) * (this.w * this.h) / (852 * 372)));
     return t;
   }
 
