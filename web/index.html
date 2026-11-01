@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>rigpop-ink · darkroom</title>
+<style>
+  :root {
+    --paper: #f3ede1;
+    --paper-dim: #e3d9c7;
+    --ink: #16131a;
+    --ink-soft: #4a4350;
+    --line: #16131a;
+    --accent: #d4462f;
+    --accent-2: #1f6f63;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #100e13;
+    color: var(--paper);
+    font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    min-height: 100vh;
+  }
+  @media (max-width: 980px) { body { grid-template-columns: 1fr; } }
+
+  /* ---------------- left: the page ---------------- */
+  .stage { padding: 22px 26px 26px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 {
+    font-size: 26px; margin: 0; letter-spacing: -0.02em;
+    font-weight: 800;
+  }
+  h1 span { color: var(--accent); }
+  .tag { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: #9b93a4; }
+
+  .frame {
+    position: relative; background: #0a090d; border: 1px solid #2a2530;
+    border-radius: 10px; overflow: hidden; min-height: 240px;
+    display: grid; place-items: center;
+  }
+  .frame img, .frame video { display: block; width: 100%; height: auto; }
+  .badge {
+    position: absolute; top: 10px; left: 10px; font: 11px/1 ui-monospace, monospace;
+    letter-spacing: .12em; text-transform: uppercase; background: #000a; color: var(--paper);
+    padding: 6px 8px; border-radius: 4px; border: 1px solid #ffffff22;
+  }
+  .pulse { position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%;
+    background: #3a3444; transition: background .08s, transform .08s; }
+  .pulse.hit { background: var(--accent); transform: scale(1.7); }
+  .busy { position: absolute; inset: 0; background: #0a090dcc; display: none; place-items: center;
+    font: 12px/1 ui-monospace, monospace; letter-spacing: .2em; text-transform: uppercase; }
+  .frame.loading .busy { display: grid; }
+
+  /* timeline */
+  .timeline { margin-top: 14px; }
+  .track { position: relative; height: 46px; background: #17141c; border: 1px solid #2a2530; border-radius: 8px; overflow: hidden; }
+  .track canvas { display: block; width: 100%; height: 100%; }
+  .marks { position: absolute; inset: 0; pointer-events: none; }
+  .mark { position: absolute; top: 0; bottom: 0; width: 1px; background: #ffffff55; }
+  .mark.cut { background: var(--accent); width: 2px; }
+  .playhead { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--paper); box-shadow: 0 0 12px #fff8; }
+  input[type=range] { width: 100%; margin: 10px 0 0; accent-color: var(--accent); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .mono { font: 12px/1.5 ui-monospace, monospace; color: #9b93a4; }
+  .readout b { color: var(--paper); font-weight: 600; }
+
+  /* ---------------- right: the controls ---------------- */
+  aside {
+    background: var(--paper); color: var(--ink);
+    border-left: 3px solid #100e13; padding: 20px 20px 26px;
+    display: flex; flex-direction: column; gap: 16px;
+    background-image: radial-gradient(#00000008 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+  .panel-title { font: 11px/1 ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; color: #6c6472; }
+  .chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .chip {
+    text-align: left; padding: 9px 10px; border: 2px solid var(--ink); border-radius: 7px;
+    background: var(--paper); color: var(--ink); cursor: pointer; font-weight: 700; font-size: 13px;
+    transition: transform .07s, background .1s;
+  }
+  .chip small { display: block; font-weight: 400; font-size: 10.5px; color: #5b5462; line-height: 1.25; margin-top: 3px; }
+  .chip:hover { transform: translateY(-1px); }
+  .chip[aria-pressed=true] { background: var(--ink); color: var(--paper); }
+  .chip[aria-pressed=true] small { color: #cfc7d4; }
+
+  .slider { display: grid; grid-template-columns: 1fr 46px; gap: 6px 10px; align-items: center; }
+  .slider label { font-size: 12.5px; font-weight: 600; }
+  .slider output { font: 12px/1 ui-monospace, monospace; text-align: right; color: #5b5462; }
+  .slider input { grid-column: 1 / -1; }
+
+  .btn {
+    border: 2px solid var(--ink); border-radius: 8px; padding: 11px 14px; font-weight: 800;
+    font-size: 13.5px; letter-spacing: .04em; cursor: pointer; background: var(--ink); color: var(--paper);
+  }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .grp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bar { height: 8px; border-radius: 99px; background: #00000018; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .2s; }
+  select, input[type=number] {
+    font: inherit; font-size: 13px; padding: 7px 8px; border: 2px solid var(--ink);
+    border-radius: 7px; background: var(--paper); color: var(--ink); width: 100%;
+  }
+  .note { font: 11.5px/1.5 ui-monospace, monospace; color: #5b5462; }
+  .footer { margin-top: auto; font: 11px/1.5 ui-monospace, monospace; color: #6c6472; }
+  a { color: var(--accent-2); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <header>
+    <h1>rigpop<span>·</span>ink</h1>
+    <div class="tag">footage that redraws itself</div>
+  </header>
+
+  <div class="frame" id="frame">
+    <span class="badge" id="badge">—</span>
+    <span class="pulse" id="pulse"></span>
+    <div class="busy">inking…</div>
+    <img id="preview" alt="inked frame" />
+  </div>
+
+  <div class="timeline">
+    <div class="track">
+      <canvas id="drama" width="1200" height="46"></canvas>
+      <div class="marks" id="marks"></div>
+      <div class="playhead" id="playhead" style="left:0"></div>
+    </div>
+    <input type="range" id="scrub" min="0" max="10" step="0.01" value="0" />
+    <div class="row readout">
+      <span class="mono" id="timecode">0.00s</span>
+      <span class="mono">·</span>
+      <span class="mono" id="shotline">shot 1</span>
+      <span class="mono">·</span>
+      <span class="mono" id="beatline">no beat</span>
+      <span class="mono">·</span>
+      <span class="mono" id="fileline"></span>
+    </div>
+  </div>
+</div>
+
+<aside>
+  <div>
+    <div class="panel-title">ink</div>
+    <div class="chips" id="presets" style="margin-top:8px"></div>
+  </div>
+
+  <div>
+    <div class="panel-title">press</div>
+    <div style="display:grid; gap:10px; margin-top:8px">
+      <div class="slider"><label for="s-thick">Line weight</label><output id="o-thick"></output>
+        <input type="range" id="s-thick" min="0.4" max="2.4" step="0.05" /></div>
+      <div class="slider"><label for="s-half">Dot screen</label><output id="o-half"></output>
+        <input type="range" id="s-half" min="0" max="0.8" step="0.02" /></div>
+      <div class="slider"><label for="s-paper">Paper grain</label><output id="o-paper"></output>
+        <input type="range" id="s-paper" min="0" max="0.22" step="0.005" /></div>
+      <div class="slider"><label for="s-levels">Paint bands</label><output id="o-levels"></output>
+        <input type="range" id="s-levels" min="3" max="14" step="1" /></div>
+      <div class="slider"><label for="s-sat">Pigment</label><output id="o-sat"></output>
+        <input type="range" id="s-sat" min="0" max="2" step="0.02" /></div>
+      <div class="slider"><label for="s-edge">Contour detail</label><output id="o-edge"></output>
+        <input type="range" id="s-edge" min="6" max="30" step="0.5" /></div>
+      <div class="slider"><label for="s-tint">Paper tint</label><output id="o-tint"></output>
+        <input type="range" id="s-tint" min="0" max="0.8" step="0.01" /></div>
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="slider" style="grid-template-columns:1fr"><label for="seed">Seed</label>
+      <input type="number" id="seed" value="1" min="1" max="9999" /></div>
+    <div class="slider" style="grid-template-columns:1fr"><label for="clip">Clip</label>
+      <select id="clip"></select></div>
+  </div>
+
+  <button class="btn" id="go">Ink the whole clip</button>
+  <div class="grp">
+    <div class="slider" style="grid-template-columns:1fr"><label for="from">From (s)</label>
+      <input type="number" id="from" value="0" min="0" step="0.5" /></div>
+    <div class="slider" style="grid-template-columns:1fr"><label for="len">Length (s)</label>
+      <input type="number" id="len" value="8" min="0" step="0.5" /></div>
+  </div>
+  <div class="bar"><i id="prog"></i></div>
+  <div class="note" id="jobline">idle — nothing rendered yet</div>
+
+  <div class="footer">
+    every frame: kuwahara flatten → paint bands → contour → ink boil → dot screen.<br />
+    the beat decides when the line trembles, the cut decides which ink.<br />
+    <a href="/api/library">library</a>
+  </div>
+</aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {
+  file: null, dur: 0, fps: 24, preset: 'manga-noir',
+  cuts: [], onsets: [], drama: [], dramaStep: 1 / 24,
+  styles: {}, t: 0, jobId: null,
+};
+
+const SLIDERS = ['thick', 'half', 'paper', 'levels', 'sat', 'edge', 'tint'];
+const QKEY = { thick: 'thick', half: 'half', paper: 'paperAmt', levels: 'levels', sat: 'sat', edge: 'edgeHi', tint: 'tintAmt' };
+
+async function boot() {
+  const [lib, presets] = await Promise.all([
+    fetch('/api/library').then((r) => r.json()),
+    fetch('/api/presets').then((r) => r.json()),
+  ]);
+  state.styles = presets;
+
+  const presetBox = $('presets');
+  for (const [key, p] of Object.entries(presets)) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.dataset.key = key;
+    b.innerHTML = `${p.label}<small>${p.blurb}</small>`;
+    b.onclick = () => { state.preset = key; syncChips(); syncSliders(); refresh(); };
+    presetBox.appendChild(b);
+  }
+
+  const clipBox = $('clip');
+  for (const f of lib) {
+    const o = document.createElement('option');
+    o.value = f.path; o.textContent = f.name;
+    clipBox.appendChild(o);
+  }
+  state.file = lib[0]?.path;
+  clipBox.onchange = () => { state.file = clipBox.value; loadClip(); };
+
+  // sliders
+  for (const s of SLIDERS) {
+    $('s-' + s).oninput = () => { syncOutputs(); refresh(); };
+  }
+  $('seed').onchange = refresh;
+  $('scrub').oninput = () => { state.t = Number($('scrub').value); paintHead(); refresh(); };
+  $('go').onclick = startRender;
+
+  syncChips();
+  await loadClip();
+}
+
+function currentStyle() {
+  return state.styles[state.preset]?.style || {};
+}
+
+function syncChips() {
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', String(b.dataset.key === state.preset));
+}
+
+function syncSliders() {
+  const st = currentStyle();
+  $('s-thick').value = st.thick ?? 1;
+  $('s-half').value = st.half ?? 0.2;
+  $('s-paper').value = st.paperAmt ?? 0.1;
+  $('s-levels').value = st.levels ?? 8;
+  $('s-sat').value = st.sat ?? 1;
+  $('s-edge').value = st.edgeHi ?? 14;
+  $('s-tint').value = st.tintAmt ?? 0.2;
+  syncOutputs();
+}
+
+function syncOutputs() {
+  for (const s of SLIDERS) $('o-' + s).textContent = Number($('s-' + s).value).toFixed(s === 'levels' ? 0 : 2);
+}
+
+async function loadClip() {
+  if (!state.file) return;
+  const a = await fetch('/api/analyze?file=' + encodeURIComponent(state.file)).then((r) => r.json());
+  state.dur = a.duration;
+  state.fps = a.fps;
+  state.cuts = a.cuts;
+  state.onsets = a.onsets;
+  state.drama = a.drama;
+  state.dramaStep = a.dramaStep;
+  $('fileline').textContent = `${a.width}×${a.height} · ${a.fps} fps · ${a.audio ? 'audio' : 'silent'} · ${a.cuts.length} cuts · ${a.onsets.length} onsets`;
+  $('scrub').max = String(Math.max(1, a.duration - 1 / a.fps));
+  $('scrub').step = String(1 / a.fps);
+  $('len').value = String(Math.min(8, Math.round(a.duration)));
+  $('from').max = String(a.duration);
+  drawMarks();
+  drawDrama();
+  syncSliders();
+  refresh();
+}
+
+function drawMarks() {
+  const box = $('marks');
+  box.innerHTML = '';
+  const pct = (t) => (t / state.dur) * 100;
+  for (const o of state.onsets) {
+    const d = document.createElement('i');
+    d.className = 'mark'; d.style.left = pct(o) + '%'; d.style.opacity = '0.25';
+    box.appendChild(d);
+  }
+  for (const c of state.cuts) {
+    const d = document.createElement('i');
+    d.className = 'mark cut'; d.style.left = pct(c) + '%';
+    box.appendChild(d);
+  }
+}
+
+function drawDrama() {
+  const c = $('drama');
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  g.fillStyle = '#17141c';
+  g.fillRect(0, 0, c.width, c.height);
+  const n = state.drama.length;
+  if (!n) return;
+  g.beginPath();
+  g.moveTo(0, c.height);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * c.width;
+    const y = c.height - 6 - state.drama[i] * (c.height - 12);
+    g.lineTo(x, y);
+  }
+  g.lineTo(c.width, c.height);
+  g.closePath();
+  const grad = g.createLinearGradient(0, 0, 0, c.height);
+  grad.addColorStop(0, '#d4462faa');
+  grad.addColorStop(1, '#d4462f11');
+  g.fillStyle = grad;
+  g.fill();
+  g.strokeStyle = '#d4462f';
+  g.lineWidth = 1.5;
+  g.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * c.width;
+    const y = c.height - 6 - state.drama[i] * (c.height - 12);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.stroke();
+}
+
+function paintHead() {
+  const pct = (state.t / state.dur) * 100;
+  $('playhead').style.left = pct + '%';
+  $('scrub').value = String(state.t);
+  $('timecode').textContent = state.t.toFixed(2) + 's';
+  const shot = state.cuts.filter((c) => c <= state.t).length + 1;
+  $('shotline').textContent = `shot ${shot}`;
+  let last = -1;
+  for (const o of state.onsets) { if (o <= state.t) last = o; else break; }
+  const age = last >= 0 ? state.t - last : Infinity;
+  $('beatline').textContent = age < 0.4 ? `beat +${age.toFixed(2)}s` : `beat ${last >= 0 ? last.toFixed(2) + 's' : '—'}`;
+  $('pulse').classList.toggle('hit', age < 0.12);
+}
+
+let refreshTimer = null;
+function refresh() {
+  paintHead();
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(fetchPreview, 70);
+}
+
+async function fetchPreview() {
+  if (!state.file) return;
+  const q = new URLSearchParams({
+    file: state.file, t: state.t.toFixed(3), preset: state.preset, seed: $('seed').value, scale: '0.55',
+  });
+  for (const s of SLIDERS) q.set(QKEY[s], $('s-' + s).value);
+  $('frame').classList.add('loading');
+  const badge = `${state.preset} · ${Number($('seed').value)}`;
+  try {
+    const r = await fetch('/api/preview?' + q.toString());
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    $('preview').src = URL.createObjectURL(blob);
+    $('badge').textContent = badge;
+  } catch (e) {
+    $('badge').textContent = 'error: ' + e.message;
+  } finally {
+    $('frame').classList.remove('loading');
+  }
+}
+
+async function startRender() {
+  if (!state.file) return;
+  const body = {
+    file: state.file,
+    preset: state.preset,
+    seed: Number($('seed').value),
+    start: Number($('from').value),
+    dur: Number($('len').value),
+    scale: 1,
+  };
+  $('go').disabled = true;
+  const { id } = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+  state.jobId = id;
+  const tick = async () => {
+    const j = await fetch('/api/job/' + id).then((r) => r.json());
+    $('prog').style.width = Math.round((j.progress || 0) * 100) + '%';
+    $('jobline').textContent = j.state === 'running'
+      ? `inking ${j.frame}/${j.total || '?'} · ${(j.fps || 0).toFixed(1)} f/s · eta ${Math.ceil(j.eta || 0)}s`
+      : j.state === 'done'
+        ? `done — ${j.result.frames} frames · ${j.result.shots} shots · ${j.result.elapsed.toFixed(1)}s`
+        : 'error: ' + j.error;
+    if (j.state === 'running') return setTimeout(tick, 600);
+    $('go').disabled = false;
+    if (j.state === 'done') playResult(j.result.url);
+  };
+  tick();
+}
+
+function playResult(url) {
+  const frame = $('frame');
+  const video = document.createElement('video');
+  video.src = url; video.controls = true; video.playsInline = true; video.autoplay = true;
+  const old = frame.querySelector('img');
+  if (old) old.remove();
+  const prev = frame.querySelector('video');
+  if (prev) prev.remove();
+  frame.appendChild(video);
+}
+
+boot();
+</script>
+</body>
+</html>

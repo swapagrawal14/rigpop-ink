@@ -1,0 +1,25 @@
+rigpop-ink — footage that redraws itself.
+
+  probe    read a clip the way the director will (cuts, onsets, tempo, drama)
+  still    render one inked frame as PNG   (fastest way to judge a look)
+  restyle  render the whole clip           (video + original audio)
+  presets  list the built-in looks
+  serve    open the darkroom in a browser  (live sliders, scrub, render)
+
+examples
+  node bin/rigpop-ink.js probe demo/source-sintel.mp4
+  node bin/rigpop-ink.js still demo/source-sintel.mp4 -o out/s.png --at 23.5 --preset pulp-horror
+  node bin/rigpop-ink.js restyle demo/source-sintel.mp4 -o out/ink.mp4 --preset manga-noir --scale 0.75
+  node bin/rigpop-ink.js restyle in.mp4 -o out.mp4 --start 12 --dur 8 --no-beat
+  node bin/rigpop-ink.js serve --port 8137
+
+flags
+  --preset <name>    manga-noir (default) · ghazal · pulp-horror · riso · blueprint
+  --start --dur <s>  render a window of the clip instead of all of it
+  --scale <k>        output scale, 0.5 = half res (2× faster)
+  --seed <n>         same seed + same file = byte-identical render
+  --crf <n>          x264 quality (default 18, lower = better)
+  --no-beat          ignore audio onsets (no line punches, no boil on the hit)
+  --no-cuts          one ink key for the whole clip
+  --no-drama         fixed line weight
+  --no-shake         no hand-held wobble
