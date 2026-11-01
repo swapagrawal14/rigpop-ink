@@ -101,7 +101,29 @@ Because the integral images make radius free, this is a resolution-independent "
 Without 3.3, one preset cannot survive both a day exterior and a cave: the paint bands are
 cut on an absolute luminance ramp, so dark footage collapses into two bands of mud.
 
-### 3.4 Cel bands
+### 3.4 Paint: band map → region merge → palette ramp
+
+Four passes, in this order, and the order is the whole point:
+
+1. **bands** — each pixel's flattened luminance is quantised to a band index
+   `0 … levels-1` (`0` = ink, `levels-1` = paper). No colour yet, just integers.
+2. **mergeRegions** — 4-connected components of *equal index* are labelled, and every
+   component smaller than `minRegion` (scaled by frame area) is repainted with the commonest
+   neighbouring index. This is the difference between "quantised photograph" and "flat
+   artwork": art has large shapes, and the flecks that make a quantised frame read as
+   camouflage are exactly the small regions this removes.
+3. **paintBands** — band indices are mapped onto the preset key's **ramp**: five hand-picked
+   colours from ink to paper. A slice of the source's own chroma (`chromaCarry`) is carried
+   back in, renormalised to the band's brightness — flat like a print, yet two different
+   objects of the same value stay different colours.
+4. **hatch** *(optional, off by default)* — procedural screentone over the mid bands; line
+   pitch tightens as the band darkens. It reads as drawn on clean plates, but on dark noisy
+   footage it amplifies the noise, so no preset enables it.
+
+Per-channel quantisation — what v0 used — lands on muddy olive/pink, because it shifts hue
+independently per channel. Mapping luminance onto a curated ramp cannot.
+
+### 3.4b Cel bands (fallback path)
 
 Per channel, pull toward luma by `sat`, then quantise to `levels` steps spanning
 `[black, white]`. Output is the "printed ink" plate.
@@ -111,14 +133,21 @@ midtone regions; it does not move contours because it runs before edge detection
 
 ### 3.5 Contours
 
-Sobel (|Gx| + |Gy|) over the **flattened, cel-quantised** luma. Operating on the flat image
-rather than the raw frame is the difference between clean ink and confetti.
+With a palette ramp the contour is the **band boundary** itself: a pixel is a *fat* line
+where the index jumps by ≥ 2 across a 4-neighbour, a *thin* line where it jumps by 1. Closed,
+exactly on the paint edge, and no threshold to tune.
+
+Without a ramp, Sobel (|Gx| + |Gy|) over the flattened luma, gated and despeckled as
+described below — operating on the flat image rather than the raw frame is the difference
+between clean ink and confetti.
 
 * threshold `t = mean(gradient) × edgeLo + edgeHi × jitterMul`
 * pixels darker than `gate` are skipped, where `gate = mix(preset.darkGate, black + 0.14(white−black), auto)`
   — inside deep shadow the ink stays solid instead of noisy
 * `|G| > 2.1 t` → **strong contour** (fat brush), else `|G| > t` → **detail line** (thin)
 * despeckle: a lone line pixel with fewer than 2 line neighbours is dropped
+* **pruneLines**: 4-connected runs of line pixels shorter than `minLine` are deleted — a
+  stroke, not a sprinkle. One pass; it is what removes the "static noise" look on busy plates
 
 ### 3.6 Ink boil
 
@@ -129,6 +158,11 @@ The binary mask becomes a **coverage field**: strong = 1.45, detail = 1.0, then 
 
 Blurring + bilinear sampling is what makes lines read as drawn instead of as a pixelated
 mask, and it makes the boil a *wobble* rather than a *jitter*.
+
+**Temporal hold** (`hold`, default ~0.5): the coverage field is an exponential blend of the
+current frame and the previous one, reset on a shot change. A drawing that shimmers every
+frame is unwatchable no matter how good a single frame looks — this is the single biggest
+difference between "stylised film" and "visual noise".
 
 ### 3.7 Paper and dot screen
 
@@ -196,8 +230,12 @@ per frame; boil offsets use seeded value noise; the key rotation is index arithm
 
 ## 8. Known limits
 
-* **Temporal consistency** is per-frame; there is no flow field, so a hard camera pan makes
-  the paint bands crawl. The boil and the shake hide most of it; it is not fixed.
+* **Temporal consistency** is per-frame plus the coverage `hold`; there is no flow field, so a
+  hard camera pan still makes the paint bands crawl.
+* **Dark, low-contrast, handheld interiors are the weak case.** Shadow lift opens them, but
+  there is no shape information to find, so bands follow sensor noise and the result reads as
+  camouflage rather than artwork. Bright, high-contrast, strongly blocked footage is what this
+  renderer is for; `probe` (drama mean, cut count) is the early warning.
 * **Dark, low-contrast, handheld footage** inks muddier than clean, high-contrast footage.
   `probe` (drama mean, cut count) is the early warning.
 * **Letterbox detection** assumes near-black bars; a gradient vignette will not be cropped.

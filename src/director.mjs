@@ -56,27 +56,32 @@ export function makeDirector({ preset, seed = 1, fps = 24, onsets = [], cuts = [
     // so a held shot still breathes at roughly 3 trembles a second
     const drift = Math.floor(f / 8);
     const boilSeed = (seed * 977 + shot * 131 + onsetsSoFar * 61 + (useBeat ? 0 : drift)) | 0;
-    const boil = base.boil + pulse * 0.9;
+    const boil = base.boil + pulse * 0.35;
 
     return {
       shot,
       pulse,
       drama: d,
       seed: boilSeed,
+      minLine: base.minLine,
+      hold: base.hold,
+      lineGain: base.lineGain,
       // paper is a fixed sheet per shot: keeps grain from crawling and lets the
       // encoder win (a per-frame grain field costs ~3x the bitrate)
       paperSeed: seed * 31 + shot * 17,
       ink: key.ink,
       tint: key.tint,
+      ramp: key.ramp,
+      accents: key.accents,
       radius: base.radius,
       levels: base.levels,
       sat: base.sat,
       black: base.black,
       white: base.white,
       edgeLo: base.edgeLo,
-      edgeHi: base.edgeHi * (1.24 - 0.5 * d) * (1 - 0.16 * pulse),
+      edgeHi: base.edgeHi * (1.2 - 0.4 * d) * (1 - 0.08 * pulse),
       darkGate: base.darkGate,
-      thick: d > 0.6 || pulse > 0.55 ? Math.max(2, base.thick) : base.thick,
+      thick: d > 0.62 || pulse > 0.6 ? base.thick * 1.45 : base.thick,
       boil,
       jitter: base.jitter,
       tintAmt: base.tintAmt,

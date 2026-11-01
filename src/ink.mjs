@@ -126,6 +126,209 @@ export class InkShader {
     }
   }
 
+  /**
+   * Screen-print posterise. Each pixel's luminance picks a slot on a *chosen*
+   * ramp (ink → paper), so the frame can only be made of the colours the
+   * designer allowed. Per-channel quantisation — what this replaced — mixes hue
+   * per channel and lands on muddy olive/pink camouflage instead.
+   */
+  posterise(ramp, black, white, sat, accents, levels) {
+    const { w, h, out } = this;
+    let rr = ramp;
+    if (levels && levels !== ramp.length && levels >= 2) {
+      rr = [];
+      for (let i = 0; i < levels; i++) {
+        const u = (i / (levels - 1)) * (ramp.length - 1);
+        const a = Math.floor(u), b = Math.min(ramp.length - 1, a + 1), f = u - a;
+        rr.push([
+          ramp[a][0] + (ramp[b][0] - ramp[a][0]) * f,
+          ramp[a][1] + (ramp[b][1] - ramp[a][1]) * f,
+          ramp[a][2] + (ramp[b][2] - ramp[a][2]) * f,
+        ]);
+      }
+    }
+    const ramp2 = rr;
+    const n = ramp2.length;
+    const span = Math.max(1, white - black);
+    const k = (n - 1) / span;
+    const carry = this.chromaCarry || 0;
+    for (let i = 0, np = w * h * 4; i < np; i += 4) {
+      const r = out[i], g = out[i + 1], b = out[i + 2];
+      let l = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (sat !== 1) l = l + (l - l) * 0; // luma is hue-free by definition
+      let idx = Math.round((l - black) * k);
+      idx = idx < 0 ? 0 : idx > n - 1 ? n - 1 : idx;
+      const c = ramp2[idx];
+      // carry a slice of the source's own chroma, renormalised to the band's
+      // brightness: flat like a print, but two different objects of the same
+      // value stay different colours
+      const w = carry;
+      if (w <= 0) {
+        out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2];
+      } else {
+        const bandL = black + idx / k;
+        const sc = bandL / (l > 6 ? l : 6);
+        out[i] = c[0] * (1 - w) + Math.min(255, r * sc) * w;
+        out[i + 1] = c[1] * (1 - w) + Math.min(255, g * sc) * w;
+        out[i + 2] = c[2] * (1 - w) + Math.min(255, b * sc) * w;
+      }
+    }
+    if (!accents) return;
+    // one saturated accent colour, painted where the source was genuinely vivid
+    for (let i = 0, np = w * h * 4; i < np; i += 4) {
+      const r = out[i], g = out[i + 1], b = out[i + 2];
+      const l = 0.299 * r + 0.587 * g + 0.114 * b;
+      const idx = (l - black) * k;
+      if (idx < accents.from || idx > accents.to) continue;
+      out[i] = r * (1 - accents.amount) + accents.rgb[0] * accents.amount;
+      out[i + 1] = g * (1 - accents.amount) + accents.rgb[1] * accents.amount;
+      out[i + 2] = b * (1 - accents.amount) + accents.rgb[2] * accents.amount;
+    }
+  }
+
+  /**
+   * Posterise to band indices (no colour yet), then *merge away* every region
+   * smaller than `minArea` into its commonest neighbour. This is the pass that
+   * turns "quantised photograph" into "flat artwork": art has large shapes, and
+   * the flecks that make a quantised frame read as camouflage are exactly the
+   * small regions this removes.
+   */
+  bands(black, white, levels) {
+    const { w, h, out } = this;
+    const idx = this.idxBuf || (this.idxBuf = new Uint8Array(w * h));
+    const span = Math.max(1, white - black);
+    const k = (levels - 1) / span;
+    for (let p = 0, i = 0, n = w * h; p < n; p++, i += 4) {
+      const l = 0.299 * out[i] + 0.587 * out[i + 1] + 0.114 * out[i + 2];
+      let v = Math.round((l - black) * k);
+      idx[p] = v < 0 ? 0 : v > levels - 1 ? levels - 1 : v;
+    }
+    this.levelsNow = levels;
+    return idx;
+  }
+
+  mergeRegions(minArea) {
+    const { w, h } = this;
+    const idx = this.idxBuf;
+    if (minArea <= 0) return idx;
+    const seen = this.seenBuf || (this.seenBuf = new Uint8Array(w * h));
+    const stack = this.stackBuf || (this.stackBuf = new Int32Array(w * h));
+    const members = this.memberBuf || (this.memberBuf = new Int32Array(w * h));
+    const votes = new Int32Array(this.levelsNow || 16);
+    seen.fill(0);
+    for (let p0 = 0; p0 < w * h; p0++) {
+      if (seen[p0]) continue;
+      const v0 = idx[p0];
+      let sp = 0, m = 0;
+      stack[sp++] = p0; seen[p0] = 1;
+      votes.fill(0);
+      while (sp > 0) {
+        const p = stack[--sp];
+        members[m++] = p;
+        const x = p % w;
+        const push = (q) => {
+          if (seen[q]) return;
+          if (idx[q] !== v0) { votes[idx[q]]++; return; }
+          seen[q] = 1; stack[sp++] = q;
+        };
+        if (x > 0) push(p - 1);
+        if (x < w - 1) push(p + 1);
+        if (p - w >= 0) push(p - w);
+        if (p + w < w * h) push(p + w);
+      }
+      if (m < minArea) {
+        let best = v0, bestN = 0;
+        for (let v = 0; v < votes.length; v++) if (votes[v] > bestN) { bestN = votes[v]; best = v; }
+        if (best !== v0) for (let i = 0; i < m; i++) idx[members[i]] = best;
+      }
+    }
+    return idx;
+  }
+
+  /** paint the band indices with the ramp's colours (+ a slice of source chroma) */
+  paintBands(ramp, black, white, carry) {
+    const { w, h, out } = this;
+    const idx = this.idxBuf;
+    const n = ramp.length;
+    const span = Math.max(1, white - black);
+    const k = (n - 1) / span;
+    const src = this.srcBuf || (this.srcBuf = new Uint8ClampedArray(w * h * 4));
+    src.set(out);
+    for (let p = 0, i = 0, np = w * h; p < np; p++, i += 4) {
+      const bandI = Math.min(n - 1, Math.round(idx[p] * (n - 1) / Math.max(1, this.levelsNow - 1)));
+      const c = ramp[bandI];
+      if (carry <= 0) {
+        out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2];
+        continue;
+      }
+      const r = src[i], g = src[i + 1], b = src[i + 2];
+      const l = 0.299 * r + 0.587 * g + 0.114 * b;
+      const bandL = black + (bandI / Math.max(1, n - 1)) * span;
+      const sc = bandL / (l > 6 ? l : 6);
+      out[i] = c[0] * (1 - carry) + Math.min(255, r * sc) * carry;
+      out[i + 1] = c[1] * (1 - carry) + Math.min(255, g * sc) * carry;
+      out[i + 2] = c[2] * (1 - carry) + Math.min(255, b * sc) * carry;
+    }
+  }
+
+  /**
+   * Screentone. Flat bands alone read as "quantised photo"; hatching is what
+   * makes a frame read as *drawn*. Line density follows the band, so shadows
+   * get dense hatch, midtones get a single spacing, lights stay bare paper.
+   */
+  hatch(cfg, ink) {
+    const { w, h, out } = this;
+    const idx = this.idxBuf;
+    if (!cfg || !idx) return;
+    const { pitch = 5, angle = 45, from = 1, to = 3, mix = 0.85, cross = true } = cfg;
+    const rad = (angle * Math.PI) / 180;
+    const cx = Math.cos(rad), cy = Math.sin(rad);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x;
+        const b = idx[p];
+        if (b < from || b > to) continue;
+        // denser pitch as the band gets darker
+        const t = (to - b + 1) / (to - from + 1);
+        const pitchHere = Math.max(2, Math.round(pitch * (1.5 - t)));
+        const a = (x * cx + y * cy) / pitchHere;
+        const da = a - Math.floor(a);
+        let hit = da * pitchHere < 1.15;
+        if (!hit && cross && b === from) {
+          const bx = (x * -cy + y * cx) / pitchHere;
+          const db = bx - Math.floor(bx);
+          hit = db * pitchHere < 1.15;
+        }
+        if (!hit) continue;
+        const i = p * 4;
+        out[i] = out[i] * (1 - mix) + ink[0] * mix;
+        out[i + 1] = out[i + 1] * (1 - mix) + ink[1] * mix;
+        out[i + 2] = out[i + 2] * (1 - mix) + ink[2] * mix;
+      }
+    }
+  }
+
+  /** contours straight off the band map — closed, exactly on the paint edges */
+  bandEdges() {
+    const { w, h, edge } = this;
+    const idx = this.idxBuf;
+    edge.fill(0);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x;
+        const v = idx[p];
+        let d = 0;
+        if (x > 0 && Math.abs(idx[p - 1] - v) > d) d = Math.abs(idx[p - 1] - v);
+        if (x < w - 1 && Math.abs(idx[p + 1] - v) > d) d = Math.abs(idx[p + 1] - v);
+        if (y > 0 && Math.abs(idx[p - w] - v) > d) d = Math.abs(idx[p - w] - v);
+        if (y < h - 1 && Math.abs(idx[p + w] - v) > d) d = Math.abs(idx[p + w] - v);
+        if (d >= 2) edge[p] = 2;        // a real step: fat contour
+        else if (d === 1) edge[p] = 1;  // a soft band change: thin line
+      }
+    }
+    return edge;
+  }
+
   cel(levels, sat, black, white) {
     const { w, h, out } = this;
     const step = (white - black) / (levels - 1);
@@ -195,7 +398,38 @@ export class InkShader {
       }
     }
     if (desp) this.despeckle();
+    this.pruneLines(this.minLine || 1);
     return t;
+  }
+
+  /**
+   * A line is a *stroke*, not a sprinkle. Label 4-connected runs of the contour
+   * mask and delete every run shorter than `minLen` pixels — this single pass is
+   * the difference between "inked panel" and "static noise".
+   */
+  pruneLines(minLen) {
+    const { w, h, edge } = this;
+    if (minLen <= 1) return;
+    const seen = this.seenBuf || (this.seenBuf = new Uint8Array(w * h));
+    const stack = this.stackBuf || (this.stackBuf = new Int32Array(w * h));
+    const members = this.memberBuf || (this.memberBuf = new Int32Array(w * h));
+    seen.fill(0);
+    for (let p0 = 0; p0 < w * h; p0++) {
+      if (!edge[p0] || seen[p0]) continue;
+      let sp = 0, m = 0;
+      stack[sp++] = p0;
+      seen[p0] = 1;
+      while (sp > 0) {
+        const p = stack[--sp];
+        members[m++] = p;
+        const x = p % w;
+        if (x > 0 && edge[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[sp++] = p - 1; }
+        if (x < w - 1 && edge[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[sp++] = p + 1; }
+        if (p - w >= 0 && edge[p - w] && !seen[p - w]) { seen[p - w] = 1; stack[sp++] = p - w; }
+        if (p + w < w * h && edge[p + w] && !seen[p + w]) { seen[p + w] = 1; stack[sp++] = p + w; }
+      }
+      if (m < minLen) for (let i = 0; i < m; i++) edge[members[i]] = 0;
+    }
   }
 
   /** drop lone pixels — a line is a run, not a speck */
@@ -253,6 +487,15 @@ export class InkShader {
           cov[y * w + x] = (a + b + b + c) * 0.25;
         }
       }
+    }
+    // hold the field across frames — a drawing that shimmers every frame is
+    // unwatchable no matter how good a single frame looks
+    const hold = this.hold || 0;
+    if (hold > 0) {
+      const prev = this.covPrev || (this.covPrev = new Float32Array(w * h));
+      if (this.holdReset) { prev.set(cov); this.holdReset = false; }
+      for (let p = 0; p < w * h; p++) cov[p] = cov[p] * (1 - hold) + prev[p] * hold;
+      prev.set(cov);
     }
     return cov;
   }
@@ -363,13 +606,28 @@ export class InkShader {
       const gamma = 1 - s.lift * (1 - Math.min(1, med / 120));
       if (gamma < 0.985) this.tone(gamma);
     }
-    this.cel(s.levels, s.sat, black, white);
-    if (s.median) this.median();
-    if (s.edgeOn === 'cel') this.reluma();   // contours land on paint-band edges
+    if (s.ramp && s.ramp.length) {
+      const levels = Math.max(3, Math.min(12, s.levels));
+      this.bands(black, white, levels);
+      const areaScale = (this.w * this.h) / (852 * 372);
+      this.mergeRegions(Math.round((s.minRegion || 160) * areaScale));
+      this.paintBands(s.ramp, black, white, s.chromaCarry ?? 0.4);
+      if (s.hatch) this.hatch(s.hatch, s.ink);
+      this.reluma();
+    } else {
+      this.cel(s.levels, s.sat, black, white);
+      if (s.median) this.median();
+      if (s.edgeOn === 'cel') this.reluma();
+    }
     const jt = 1 + (noise2(3.3, 7.7, s.seed) - 0.5) * s.jitter;
     const gate = s.darkGate * (1 - s.auto) + (black + (white - black) * 0.14) * s.auto;
     this.strongMul = s.strong;
     this.lineGain = s.lineGain;
+    this.minLine = s.minLine;
+    this.minRegion = s.minRegion;
+    this.chromaCarry = s.chromaCarry;
+    this.hold = s.hold;
+    if (s.shot !== this.lastShot) { this.holdReset = true; this.lastShot = s.shot; }
     this.blurPasses = s.blurPasses;
     const thr = this.edgeMask(s.edgeLo, s.edgeHi * jt, gate, s.despeckle);
     this.paperGrain(s.paperAmt, (s.paperSeed ?? s.seed) + 7);
@@ -413,6 +671,11 @@ export const DEFAULTS = {
   median: true,
   lift: 0.55,
   lineGain: 1.25,
+  minLine: 28,
+  chromaCarry: 0.4,
+  minRegion: 160,
+  hatch: null,
+  hold: 0.45,
   blurPasses: 1,
   strong: 2.1,
 };
