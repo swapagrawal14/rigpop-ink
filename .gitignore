@@ -3,3 +3,4 @@ out/
 demo/*.mp4
 *.log
 .DS_Store
+PUSH-NOTES.md
